@@ -2,6 +2,53 @@ from django.test import TestCase
 import datetime
 from django.utils import timezone
 from .models import Question
+from django.urls import reverse
+
+
+def create_question(question_text, days):
+    time = timezone.now() + datetime.timedelta(days=days)
+    return Question.objects.create(pub_date=time, question_text=question_text)
+
+class QuestionIndexViewTests(TestCase):
+    def test_no_questions(self):
+        response = self.client.get(reverse("polls:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No polls are available")
+        self.assertQuerySetEqual(response.context["latest_question_list"], [])
+    
+    def test_past_question(self):
+        question = create_question("Past question", -30)
+        response = self.client.get(reverse("polls:index"))
+        self.assertQuerySetEqual(
+            response.context["latest_question_list"],
+            [question],
+        )
+
+    def test_future_question(self):
+        create_question("Future question", days=30)
+        response = self.client.get(reverse("polls:index"))
+        self.assertContains(response, "No polls are available")
+        self.assertQuerySetEqual(response.context["latest_question_list"], [])
+
+    def test_future_question_and_past_question(self):
+        question = create_question("Past question",-10)
+        create_question("Future question", 8)
+        response = self.client.get(reverse("polls:index"))
+        self.assertQuerySetEqual(
+            response.context["latest_question_list"],
+            [question],
+        )
+
+    def test_two_past_questions(self):
+        q1 = create_question("Past 1", -5)
+        q2 = create_question("Past 2", -30)
+        response = self.client.get(reverse("polls:index"))
+        self.assertQuerySetEqual(
+            response.context["latest_question_list"],
+            [q1,q2]
+        )
+
+
 
 class QuestionModelTest(TestCase):
     def test_was_published_recently_with_future_question(self):
@@ -22,21 +69,3 @@ class QuestionModelTest(TestCase):
 
 
 # $ python3 manage.py test polls
-
-# --> To test a view <--
-
-"""
->>> from django.test.utils import setup_test_environment
->>> setup_test_environment()
->>> from django.test import Client
-# create an instance of the client for our use
->>> client = Client()
->>> response = client.get("/") # or /polls
->>> response.status_code
-
->>> from django.urls import reverse
->>> response = client.get(reverse("polls:index"))
->>> response.status_code
->>> response.content
->>> response.context["latest_question_list"]
-"""
